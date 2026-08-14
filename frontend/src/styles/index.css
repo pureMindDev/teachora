@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid #F5A623;
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-indigo-deep text-white hover:bg-indigo-mid active:scale-[0.98] shadow-card;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-ink border border-black/10 hover:border-black/20 active:scale-[0.98];
+  }
+  .btn-signal {
+    @apply btn bg-signal text-ink hover:brightness-105 active:scale-[0.98];
+  }
+  .btn-danger {
+    @apply btn bg-danger text-white hover:brightness-105 active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-slate-muted hover:bg-black/5;
+  }
+  .input {
+    @apply w-full rounded-xl border border-black/10 bg-white px-4 py-2.5 text-sm text-ink placeholder:text-slate-faint focus:border-indigo-deep transition-colors;
+  }
+  .label {
+    @apply block text-xs font-semibold uppercase tracking-wide text-slate-muted mb-1.5;
+  }
+  .card {
+    @apply rounded-2xl border border-black/5 bg-white shadow-card;
+  }
+  .eyebrow {
+    @apply text-xs font-mono font-semibold uppercase tracking-widest text-indigo-deep;
+  }
+  .status-ring {
+    @apply relative rounded-2xl transition-shadow duration-300;
+  }
+  .status-ring--live {
+    @apply animate-pulse-ring ring-2 ring-live;
+  }
+  .status-ring--hand {
+    @apply ring-2 ring-signal;
+  }
+  .status-ring--violation {
+    @apply animate-pulse-danger ring-2 ring-danger;
+  }
+  .status-ring--idle {
+    @apply ring-1 ring-white/10;
+  }
+}
