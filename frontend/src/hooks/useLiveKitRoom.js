@@ -32,6 +32,7 @@ export function useLiveKitRoom({ classId, initialCamOn = true, initialMicOn = tr
   const [camOn, setCamOn] = useState(initialCamOn);
   const [micOn, setMicOn] = useState(initialMicOn);
   const [screenSharing, setScreenSharing] = useState(false);
+  const [screenSharerIdentity, setScreenSharerIdentity] = useState(null);
   const [handRaised, setHandRaised] = useState(false);
 
   const [messages, setMessages] = useState([]);
@@ -54,6 +55,29 @@ export function useLiveKitRoom({ classId, initialCamOn = true, initialMicOn = tr
     const room = roomRef.current;
     if (!room) return;
     setParticipants(Array.from(room.remoteParticipants.values()));
+  }, []);
+
+  // Screen share is just another track, published by whichever participant
+  // clicked "share" — tutor or student. This scans everyone in the room
+  // (not just "am I sharing") so the tile shows up for every viewer, not
+  // only the person who started the share.
+  const detectScreenShare = useCallback(() => {
+    const room = roomRef.current;
+    if (!room) return;
+
+    const localPub = room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+    if (localPub?.track) {
+      setScreenSharerIdentity(room.localParticipant.identity);
+      return;
+    }
+    for (const p of room.remoteParticipants.values()) {
+      const pub = p.getTrackPublication(Track.Source.ScreenShare);
+      if (pub?.track) {
+        setScreenSharerIdentity(p.identity);
+        return;
+      }
+    }
+    setScreenSharerIdentity(null);
   }, []);
 
   useEffect(() => {
@@ -101,8 +125,16 @@ export function useLiveKitRoom({ classId, initialCamOn = true, initialMicOn = tr
         room
           .on(RoomEvent.ParticipantConnected, refreshParticipants)
           .on(RoomEvent.ParticipantDisconnected, refreshParticipants)
-          .on(RoomEvent.TrackSubscribed, refreshParticipants)
-          .on(RoomEvent.TrackUnsubscribed, refreshParticipants)
+          .on(RoomEvent.TrackSubscribed, () => {
+            refreshParticipants();
+            detectScreenShare();
+          })
+          .on(RoomEvent.TrackUnsubscribed, () => {
+            refreshParticipants();
+            detectScreenShare();
+          })
+          .on(RoomEvent.LocalTrackPublished, detectScreenShare)
+          .on(RoomEvent.LocalTrackUnpublished, detectScreenShare)
           .on(RoomEvent.ActiveSpeakersChanged, refreshParticipants)
           .on(RoomEvent.ConnectionQualityChanged, refreshParticipants)
           .on(RoomEvent.TrackMuted, refreshParticipants)
@@ -211,10 +243,11 @@ export function useLiveKitRoom({ classId, initialCamOn = true, initialMicOn = tr
     try {
       await room.localParticipant.setScreenShareEnabled(next);
       setScreenSharing(next);
+      detectScreenShare();
     } catch {
       // user cancelled the screen-share picker
     }
-  }, [screenSharing, devMode]);
+  }, [screenSharing, devMode, detectScreenShare]);
 
   const toggleHand = useCallback(() => {
     if (devMode) return; // no one else is in the room to see it
@@ -280,6 +313,7 @@ export function useLiveKitRoom({ classId, initialCamOn = true, initialMicOn = tr
     camOn,
     micOn,
     screenSharing,
+    screenSharerIdentity,
     handRaised,
     messages,
     handsQueue,

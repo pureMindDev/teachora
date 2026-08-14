@@ -66,6 +66,7 @@ export default function ClassRoom() {
     camOn,
     micOn,
     screenSharing,
+    screenSharerIdentity,
     handRaised,
     messages,
     handsQueue,
@@ -167,6 +168,17 @@ export default function ClassRoom() {
     return remoteStudents;
   }, [participants, tutorParticipant, isTutor, localParticipant, user.name]);
 
+  // Whoever is screen-sharing (tutor or student, local or remote) — resolved
+  // from the actual LiveKit track-publish state, not from "am I sharing".
+  const screenShareParticipant = useMemo(() => {
+    if (!screenSharerIdentity) return null;
+    if (localParticipant?.identity === screenSharerIdentity) {
+      return { participant: localParticipant, isLocal: true, name: user.name };
+    }
+    const found = participants.find((p) => p.identity === screenSharerIdentity);
+    return found ? { participant: found, isLocal: false, name: found.name } : null;
+  }, [screenSharerIdentity, localParticipant, participants, user.name]);
+
   const ringStateFor = (identity, isLocalTile) => {
     const localIdentity = localParticipant?.identity;
     const effectiveIdentity = isLocalTile ? localIdentity : identity;
@@ -245,17 +257,18 @@ export default function ClassRoom() {
                 ringState={ringStateFor(tutorParticipant.participant?.identity, tutorParticipant.isLocal)}
                 metadata={{}}
               />
-              {screenSharing && tutorParticipant.isLocal && (
-                <div className="mt-3">
-                  <VideoTile
-                    participant={localParticipant}
-                    source={Track.Source.ScreenShare}
-                    isLocal
-                    label="Your screen"
-                    ringState="idle"
-                  />
-                </div>
-              )}
+            </div>
+          )}
+
+          {screenShareParticipant && (
+            <div className="mx-auto w-full max-w-3xl">
+              <VideoTile
+                participant={screenShareParticipant.participant}
+                source={Track.Source.ScreenShare}
+                isLocal={screenShareParticipant.isLocal}
+                label={screenShareParticipant.isLocal ? "Your screen" : `${screenShareParticipant.name}'s screen`}
+                ringState="idle"
+              />
             </div>
           )}
 
