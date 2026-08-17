@@ -33,6 +33,9 @@ export function useLiveKitRoom({ classId, initialCamOn = true, initialMicOn = tr
   const [micOn, setMicOn] = useState(initialMicOn);
   const [screenSharing, setScreenSharing] = useState(false);
   const [screenSharerIdentity, setScreenSharerIdentity] = useState(null);
+  const [screenShareSupported] = useState(
+    typeof navigator !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia
+  );
   const [handRaised, setHandRaised] = useState(false);
 
   const [messages, setMessages] = useState([]);
@@ -237,17 +240,51 @@ export function useLiveKitRoom({ classId, initialCamOn = true, initialMicOn = tr
 
   const toggleScreenShare = useCallback(async () => {
     if (devMode) return; // requires a real room to publish to other participants
+    if (!screenShareSupported) {
+      const err = new Error(
+        "Screen sharing isn't supported in this browser. On iPhone/iPad, Safari doesn't support it at all — try a laptop or desktop browser instead."
+      );
+      err.code = "unsupported";
+      throw err;
+    }
     const room = roomRef.current;
     if (!room) return;
     const next = !screenSharing;
     try {
-      await room.localParticipant.setScreenShareEnabled(next);
+      if (next) {
+        await room.localParticipant.setScreenShareEnabled(
+          true,
+          {
+            audio: false,
+            // Cap resolution so encoding stays fast on modest connections —
+            // sharper than this doesn't help legibility much and costs framerate.
+            resolution: { width: 1920, height: 1080 },
+          },
+          {
+            videoEncoding: { maxBitrate: 3_000_000, maxFramerate: 20 },
+            // Simulcast lets viewers on a weaker connection subscribe to a
+            // lower-res layer automatically instead of stalling waiting for
+            // the full-quality stream to arrive.
+            simulcast: true,
+          }
+        );
+      } else {
+        await room.localParticipant.setScreenShareEnabled(false);
+      }
       setScreenSharing(next);
       detectScreenShare();
-    } catch {
-      // user cancelled the screen-share picker
+    } catch (err) {
+      if (err?.code === "unsupported") throw err;
+      if (err?.name === "NotAllowedError") {
+        const permErr = new Error("Screen-share permission was denied or the picker was closed.");
+        permErr.code = "permission-denied";
+        throw permErr;
+      }
+      const genericErr = new Error("Couldn't start screen sharing. Please try again.");
+      genericErr.code = "other";
+      throw genericErr;
     }
-  }, [screenSharing, devMode, detectScreenShare]);
+  }, [screenSharing, devMode, detectScreenShare, screenShareSupported]);
 
   const toggleHand = useCallback(() => {
     if (devMode) return; // no one else is in the room to see it
@@ -314,6 +351,7 @@ export function useLiveKitRoom({ classId, initialCamOn = true, initialMicOn = tr
     micOn,
     screenSharing,
     screenSharerIdentity,
+    screenShareSupported,
     handRaised,
     messages,
     handsQueue,

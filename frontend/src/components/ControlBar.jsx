@@ -1,6 +1,6 @@
 import React from "react";
 
-function CtrlBtn({ active, danger, onClick, children, label }) {
+function CtrlBtn({ active, danger, dimmed, onClick, children, label }) {
   return (
     <button
       onClick={onClick}
@@ -10,6 +10,8 @@ function CtrlBtn({ active, danger, onClick, children, label }) {
           ? "bg-danger text-white"
           : active
           ? "bg-white/15 text-white"
+          : dimmed
+          ? "bg-white/5 text-white/25"
           : "bg-white/5 text-white/50 hover:bg-white/10"
       }`}
     >
@@ -22,6 +24,7 @@ export default function ControlBar({
   micOn,
   camOn,
   screenSharing,
+  screenShareSupported = true,
   handRaised,
   chatOpen,
   peopleOpen,
@@ -44,7 +47,12 @@ export default function ControlBar({
       <CtrlBtn active={camOn} danger={!camOn} onClick={onToggleCamera} label={camOn ? "Turn camera off" : "Turn camera on"}>
         {camOn ? "📷" : "🚫"}
       </CtrlBtn>
-      <CtrlBtn active={screenSharing} onClick={onToggleScreenShare} label="Share screen">
+      <CtrlBtn
+        active={screenSharing}
+        dimmed={!screenShareSupported}
+        onClick={onToggleScreenShare}
+        label={screenShareSupported ? "Share screen" : "Screen sharing isn't supported on this device/browser"}
+      >
         🖥️
       </CtrlBtn>
       <CtrlBtn active={handRaised} onClick={onToggleHand} label={handRaised ? "Lower hand" : "Raise hand"}>

@@ -67,6 +67,7 @@ export default function ClassRoom() {
     micOn,
     screenSharing,
     screenSharerIdentity,
+    screenShareSupported,
     handRaised,
     messages,
     handsQueue,
@@ -123,7 +124,24 @@ export default function ClassRoom() {
       icon: "🧪",
     });
 
-  const handleToggleScreenShare = () => (devMode ? devModeNotice() : toggleScreenShare());
+  const handleToggleScreenShare = async () => {
+    if (devMode) return devModeNotice();
+    if (!screenShareSupported) {
+      toast.error(
+        "Screen sharing isn't supported in this browser. On iPhone/iPad, Safari can't do it at all — try a laptop/desktop browser instead.",
+        { duration: 6000 }
+      );
+      return;
+    }
+    try {
+      await toggleScreenShare();
+    } catch (err) {
+      if (err.code !== "permission-denied") {
+        // Permission-denied is the user closing the picker — not worth a toast.
+        toast.error(err.message || "Couldn't start screen sharing");
+      }
+    }
+  };
   const handleToggleHand = () => (devMode ? devModeNotice() : toggleHand());
   const handleSendChat = (text) => (devMode ? devModeNotice() : sendChatMessage(text));
 
@@ -337,6 +355,7 @@ export default function ClassRoom() {
           micOn={micOn}
           camOn={camOn}
           screenSharing={screenSharing}
+          screenShareSupported={devMode ? true : screenShareSupported}
           handRaised={handRaised}
           chatOpen={panel === "chat"}
           peopleOpen={panel === "people"}
