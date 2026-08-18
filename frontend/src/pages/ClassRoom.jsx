@@ -8,6 +8,7 @@ import ControlBar from "../components/ControlBar.jsx";
 import ChatPanel from "../components/ChatPanel.jsx";
 import ParticipantsPanel from "../components/ParticipantsPanel.jsx";
 import VideoTile from "../components/VideoTile.jsx";
+import RoomAudio from "../components/RoomAudio.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useLiveKitRoom } from "../hooks/useLiveKitRoom.js";
 import api from "../api/axios.js";
@@ -247,6 +248,7 @@ export default function ClassRoom() {
   }, [devMode, tutorParticipant, screenShareParticipant, studentTiles, violations, handsQueue]);
 
   const expandedTile = expandedKey ? allTiles.find((t) => t.key === expandedKey) : null;
+  const otherTiles = expandedTile ? allTiles.filter((t) => t.key !== expandedTile.key) : [];
 
   // If the expanded tile disappears (e.g. screen share stops, or a student
   // leaves) while it's fullscreen, fall back to the grid instead of showing
@@ -277,6 +279,11 @@ export default function ClassRoom() {
 
   return (
     <div className="flex h-screen flex-col bg-ink text-white">
+      {/* Audio is intentionally rendered once here, decoupled from whatever
+          video layout (grid vs expanded vs thumbnails) is on screen, so
+          expanding/collapsing a tile never interrupts sound. */}
+      {!devMode && <RoomAudio participants={participants} />}
+
       <header className="flex items-center justify-between border-b border-white/10 px-5 py-3">
         <div className="flex items-center gap-3 min-w-0">
           <span className="truncate font-display text-sm font-semibold sm:text-base">
@@ -315,17 +322,40 @@ export default function ClassRoom() {
               <DevPreviewTile stream={localStream} camOn={camOn} label={user.name} />
             </div>
           ) : expandedTile ? (
-            <VideoTile
-              participant={expandedTile.participant}
-              source={expandedTile.source}
-              isLocal={expandedTile.isLocal}
-              label={expandedTile.label}
-              ringState={expandedTile.ringState}
-              expandable
-              expanded
-              fill
-              onToggleExpand={() => setExpandedKey(null)}
-            />
+            <div className="relative h-full w-full">
+              <VideoTile
+                participant={expandedTile.participant}
+                source={expandedTile.source}
+                isLocal={expandedTile.isLocal}
+                label={expandedTile.label}
+                ringState={expandedTile.ringState}
+                expandable
+                expanded
+                fill
+                onToggleExpand={() => setExpandedKey(null)}
+              />
+
+              {otherTiles.length > 0 && (
+                <div className="absolute right-3 top-3 flex max-w-[80%] gap-2 overflow-x-auto sm:max-w-[60%]">
+                  {otherTiles.map((t) => (
+                    <button
+                      key={t.key}
+                      onClick={() => setExpandedKey(t.key)}
+                      title={`Expand ${t.label}`}
+                      className="w-24 shrink-0 sm:w-32"
+                    >
+                      <VideoTile
+                        participant={t.participant}
+                        source={t.source}
+                        isLocal={t.isLocal}
+                        label={t.label}
+                        ringState={t.ringState}
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           ) : (
             <>
               {tutorParticipant && (
