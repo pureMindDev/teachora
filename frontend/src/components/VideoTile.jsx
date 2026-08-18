@@ -12,6 +12,10 @@ export default function VideoTile({
   label,
   muted = false,
   metadata = {},
+  expandable = false,
+  expanded = false,
+  onToggleExpand,
+  fill = false, // true when this tile is the fullscreen expanded view
 }) {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
@@ -62,7 +66,11 @@ export default function VideoTile({
     }[ringState] || "status-ring--idle";
 
   return (
-    <div className={`status-ring ${ringClass} relative aspect-video overflow-hidden rounded-2xl bg-ink-soft bg-[#171B2B]`}>
+    <div
+      className={`status-ring ${ringClass} group relative overflow-hidden bg-ink-soft bg-[#171B2B] ${
+        fill ? "h-full w-full rounded-none" : "aspect-video rounded-2xl"
+      }`}
+    >
       <video
         ref={videoRef}
         autoPlay
@@ -89,6 +97,25 @@ export default function VideoTile({
         <span className="text-xs font-medium text-white">{label}</span>
         {ringState === "hand" && <span className="text-xs">✋</span>}
       </div>
+
+      {expandable && (
+        <button
+          onClick={onToggleExpand}
+          aria-label={expanded ? "Exit fullscreen" : "Expand to fullscreen"}
+          title={expanded ? "Exit fullscreen" : "Expand to fullscreen"}
+          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-lg bg-black/50 text-white/80 backdrop-blur transition-opacity hover:bg-black/70 hover:text-white sm:opacity-0 sm:group-hover:opacity-100"
+        >
+          {expanded ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <path d="M9 3H3v6M15 21h6v-6M21 3l-7 7M3 21l7-7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </button>
+      )}
     </div>
   );
 }

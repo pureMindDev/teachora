@@ -53,6 +53,7 @@ export default function ClassRoom() {
   const [panel, setPanel] = useState(null); // null | "chat" | "people"
   const [unreadChat, setUnreadChat] = useState(0);
   const [ending, setEnding] = useState(false);
+  const [expandedKey, setExpandedKey] = useState(null); // null | "tutor" | "screenshare" | "student:<id>"
 
   const {
     connecting,
@@ -186,6 +187,14 @@ export default function ClassRoom() {
     return remoteStudents;
   }, [participants, tutorParticipant, isTutor, localParticipant, user.name]);
 
+  const ringStateFor = (identity, isLocalTile) => {
+    const localIdentity = localParticipant?.identity;
+    const effectiveIdentity = isLocalTile ? localIdentity : identity;
+    if (violations.some((v) => v.identity === effectiveIdentity)) return "violation";
+    if (handsQueue.some((h) => h.identity === effectiveIdentity)) return "hand";
+    return "idle";
+  };
+
   // Whoever is screen-sharing (tutor or student, local or remote) — resolved
   // from the actual LiveKit track-publish state, not from "am I sharing".
   const screenShareParticipant = useMemo(() => {
@@ -197,13 +206,54 @@ export default function ClassRoom() {
     return found ? { participant: found, isLocal: false, name: found.name } : null;
   }, [screenSharerIdentity, localParticipant, participants, user.name]);
 
-  const ringStateFor = (identity, isLocalTile) => {
-    const localIdentity = localParticipant?.identity;
-    const effectiveIdentity = isLocalTile ? localIdentity : identity;
-    if (violations.some((v) => v.identity === effectiveIdentity)) return "violation";
-    if (handsQueue.some((h) => h.identity === effectiveIdentity)) return "hand";
-    return "idle";
-  };
+  // Flat list of every tile currently on screen, so any of them (tutor,
+  // screen share, or a student) can be looked up by key and expanded to
+  // fill the main viewing area.
+  const allTiles = useMemo(() => {
+    if (devMode) return [];
+    const list = [];
+    if (tutorParticipant) {
+      list.push({
+        key: "tutor",
+        participant: tutorParticipant.participant,
+        isLocal: tutorParticipant.isLocal,
+        source: Track.Source.Camera,
+        label: tutorParticipant.name,
+        ringState: ringStateFor(tutorParticipant.participant?.identity, tutorParticipant.isLocal),
+      });
+    }
+    if (screenShareParticipant) {
+      list.push({
+        key: "screenshare",
+        participant: screenShareParticipant.participant,
+        isLocal: screenShareParticipant.isLocal,
+        source: Track.Source.ScreenShare,
+        label: screenShareParticipant.isLocal ? "Your screen" : `${screenShareParticipant.name}'s screen`,
+        ringState: "idle",
+      });
+    }
+    studentTiles.forEach((t) => {
+      list.push({
+        key: `student:${t.isLocal ? "local" : t.participant.identity}`,
+        participant: t.participant,
+        isLocal: t.isLocal,
+        source: Track.Source.Camera,
+        label: t.name,
+        ringState: ringStateFor(t.participant?.identity, t.isLocal),
+      });
+    });
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devMode, tutorParticipant, screenShareParticipant, studentTiles, violations, handsQueue]);
+
+  const expandedTile = expandedKey ? allTiles.find((t) => t.key === expandedKey) : null;
+
+  // If the expanded tile disappears (e.g. screen share stops, or a student
+  // leaves) while it's fullscreen, fall back to the grid instead of showing
+  // a frozen/blank expanded view.
+  useEffect(() => {
+    if (expandedKey && !expandedTile) setExpandedKey(null);
+  }, [expandedKey, expandedTile]);
 
   if (connecting) {
     return (
@@ -259,55 +309,75 @@ export default function ClassRoom() {
       )}
 
       <div className="flex min-h-0 flex-1">
-        <main className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+        <main className={`flex min-w-0 flex-1 flex-col ${expandedTile ? "" : "gap-3 overflow-y-auto p-4"}`}>
           {devMode ? (
             <div className="mx-auto w-full max-w-md">
               <DevPreviewTile stream={localStream} camOn={camOn} label={user.name} />
             </div>
+          ) : expandedTile ? (
+            <VideoTile
+              participant={expandedTile.participant}
+              source={expandedTile.source}
+              isLocal={expandedTile.isLocal}
+              label={expandedTile.label}
+              ringState={expandedTile.ringState}
+              expandable
+              expanded
+              fill
+              onToggleExpand={() => setExpandedKey(null)}
+            />
           ) : (
             <>
-          {tutorParticipant && (
-            <div className="mx-auto w-full max-w-3xl">
-              <VideoTile
-                participant={tutorParticipant.participant}
-                isLocal={tutorParticipant.isLocal}
-                label={tutorParticipant.name}
-                ringState={ringStateFor(tutorParticipant.participant?.identity, tutorParticipant.isLocal)}
-                metadata={{}}
-              />
-            </div>
-          )}
+              {tutorParticipant && (
+                <div className="mx-auto w-full max-w-3xl">
+                  <VideoTile
+                    participant={tutorParticipant.participant}
+                    isLocal={tutorParticipant.isLocal}
+                    label={tutorParticipant.name}
+                    ringState={ringStateFor(tutorParticipant.participant?.identity, tutorParticipant.isLocal)}
+                    metadata={{}}
+                    expandable
+                    onToggleExpand={() => setExpandedKey("tutor")}
+                  />
+                </div>
+              )}
 
-          {screenShareParticipant && (
-            <div className="mx-auto w-full max-w-3xl">
-              <VideoTile
-                participant={screenShareParticipant.participant}
-                source={Track.Source.ScreenShare}
-                isLocal={screenShareParticipant.isLocal}
-                label={screenShareParticipant.isLocal ? "Your screen" : `${screenShareParticipant.name}'s screen`}
-                ringState="idle"
-              />
-            </div>
-          )}
+              {screenShareParticipant && (
+                <div className="mx-auto w-full max-w-3xl">
+                  <VideoTile
+                    participant={screenShareParticipant.participant}
+                    source={Track.Source.ScreenShare}
+                    isLocal={screenShareParticipant.isLocal}
+                    label={screenShareParticipant.isLocal ? "Your screen" : `${screenShareParticipant.name}'s screen`}
+                    ringState="idle"
+                    expandable
+                    onToggleExpand={() => setExpandedKey("screenshare")}
+                  />
+                </div>
+              )}
 
-          {studentTiles.length > 0 && (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {studentTiles.map((t) => (
-                <VideoTile
-                  key={t.isLocal ? "local" : t.participant.identity}
-                  participant={t.participant}
-                  isLocal={t.isLocal}
-                  label={t.name}
-                  ringState={ringStateFor(t.participant?.identity, t.isLocal)}
-                />
-              ))}
-            </div>
-          )}
-
+              {studentTiles.length > 0 && (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {studentTiles.map((t) => {
+                    const key = t.isLocal ? "local" : t.participant.identity;
+                    return (
+                      <VideoTile
+                        key={key}
+                        participant={t.participant}
+                        isLocal={t.isLocal}
+                        label={t.name}
+                        ringState={ringStateFor(t.participant?.identity, t.isLocal)}
+                        expandable
+                        onToggleExpand={() => setExpandedKey(`student:${key}`)}
+                      />
+                    );
+                  })}
+                </div>
+              )}
             </>
           )}
 
-          {cameraRequired && !isTutor && !camOn && (
+          {!expandedTile && cameraRequired && !isTutor && !camOn && (
             <div className="mx-auto mt-2 flex max-w-md items-center gap-2 rounded-xl bg-danger/15 px-4 py-2.5 text-sm text-danger">
               ⚠ This tutor requires cameras on. Turn yours back on to stay in good standing.
             </div>
@@ -315,12 +385,12 @@ export default function ClassRoom() {
         </main>
 
         {panel && (
-          <aside className="hidden w-80 shrink-0 border-l border-white/10 bg-ink-soft bg-[#171B2B] sm:flex sm:flex-col">
+          <aside className="fixed inset-0 z-40 flex flex-col bg-[#171B2B] sm:static sm:z-auto sm:w-80 sm:shrink-0 sm:border-l sm:border-white/10">
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
               <span className="font-display text-sm font-semibold capitalize">
                 {panel === "chat" ? "Class chat" : `Participants (${participants.length + 1})`}
               </span>
-              <button onClick={() => setPanel(null)} className="text-white/40 hover:text-white">
+              <button onClick={() => setPanel(null)} className="text-white/40 hover:text-white" aria-label="Close">
                 ✕
               </button>
             </div>
